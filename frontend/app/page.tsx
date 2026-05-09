@@ -2,18 +2,14 @@
 
 import { useState } from "react";
 
-/* ─── Google Fonts injected via style tag ─────────────────────────────────── */
 const FontStyle = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap');
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body, html { font-family: 'DM Sans', sans-serif; background: #ffffff; }
-
     .font-display { font-family: 'Playfair Display', serif; }
 
-    /* Subtle dot grid background */
     .dot-bg {
       background-color: #ffffff;
       background-image:
@@ -25,7 +21,6 @@ const FontStyle = () => (
       background-size: 28px 28px, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
     }
 
-    /* Focus ring for inputs */
     .k-input { transition: border-color 0.18s, box-shadow 0.18s; }
     .k-input:focus {
       outline: none;
@@ -33,26 +28,21 @@ const FontStyle = () => (
       box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
     }
 
-    /* Card hover */
     .career-card { transition: transform 0.22s ease, box-shadow 0.22s ease; }
     .career-card:hover { transform: translateY(-5px); box-shadow: 0 24px 56px rgba(0,0,0,0.09) !important; }
 
-    /* Stream pill */
     .stream-pill { transition: all 0.18s ease; cursor: pointer; }
     .stream-pill:hover { transform: translateY(-1px); }
 
-    /* Spinner */
     @keyframes kspin { to { transform: rotate(360deg); } }
     .kspin { display: inline-block; animation: kspin 0.75s linear infinite; }
 
-    /* Fade-up entrance */
     @keyframes kfadeup { from { opacity:0; transform:translateY(18px); } to { opacity:1; transform:translateY(0); } }
     .fade-up  { animation: kfadeup 0.4s ease both; }
     .delay-1  { animation-delay: 0.07s; }
     .delay-2  { animation-delay: 0.14s; }
     .delay-3  { animation-delay: 0.21s; }
 
-    /* Scrollbar */
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: #f8fafc; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
@@ -63,7 +53,6 @@ const FontStyle = () => (
   `}</style>
 );
 
-/* ─── Stream config ──────────────────────────────────────────────────────── */
 const STREAMS = [
   { key: "Science",    label: "Science & Technology",       icon: "⚗️",  accent: "#0ea5e9", lightBg: "#f0f9ff", border: "#bae6fd", textColor: "#0369a1" },
   { key: "Commerce",   label: "Commerce & Finance",         icon: "📈",  accent: "#10b981", lightBg: "#ecfdf5", border: "#6ee7b7", textColor: "#047857" },
@@ -76,22 +65,18 @@ const STREAMS = [
 type Career = { course: string; duration: string; exam: string; course_fee: string; jobs: string; salary: string; };
 const getSM = (key: string) => STREAMS.find(s => s.key.toLowerCase() === key.toLowerCase()) ?? STREAMS[0];
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   ROOT PAGE
-═══════════════════════════════════════════════════════════════════════════ */
 export default function Home() {
-  const [user, setUser]               = useState<any>(null);
-  const [isReg, setIsReg]             = useState(false);
-  const [loginForm, setLoginForm]     = useState({ email: "", password: "" });
-  const [regForm, setRegForm]         = useState({ name: "", email: "", password: "" });
-  const [student, setStudent]         = useState({ name: "", stream: "Science", mobile: "", state: "" });
-  const [result, setResult]           = useState<Career[]>([]);
-  const [search, setSearch]           = useState("");
-  const [loading, setLoading]         = useState(false);
-  const [saved, setSaved]             = useState(false);
+  const [user, setUser]                 = useState<any>(null);
+  const [isReg, setIsReg]               = useState(false);
+  const [loginForm, setLoginForm]       = useState({ email: "", password: "" });
+  const [regForm, setRegForm]           = useState({ name: "", email: "", password: "" });
+  const [student, setStudent]           = useState({ name: "", stream: "Science", mobile: "", state: "" });
+  const [result, setResult]             = useState<Career[]>([]);
+  const [search, setSearch]             = useState("");
+  const [loading, setLoading]           = useState(false);
+  const [saved, setSaved]               = useState(false);
   const [activeStream, setActiveStream] = useState("");
 
-  /* Auth */
   const handleLogin = async () => {
     try {
       const r = await fetch("http://localhost:8000/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(loginForm) });
@@ -109,7 +94,6 @@ export default function Home() {
     } catch { alert("Register Error"); }
   };
 
-  /* Student */
   const saveStudent = async () => {
     try {
       await fetch("http://localhost:8000/student", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ ...student, user_id: user.id }) });
@@ -117,7 +101,6 @@ export default function Home() {
     } catch { alert("Error Saving Student"); }
   };
 
-  /* Roadmap */
   const getRoadmap = async () => {
     setLoading(true); setResult([]); setSearch("");
     try {
@@ -133,30 +116,40 @@ export default function Home() {
     i.jobs.toLowerCase().includes(search.toLowerCase())
   );
 
-  /* ══════════════════════════════════════════════════════════════════════
-     AUTH SCREEN
-  ══════════════════════════════════════════════════════════════════════ */
+  /* ── AUTH SCREEN ── */
   if (!user) return (
     <>
       <FontStyle />
       <div className="dot-bg" style={{ minHeight:"100vh", display:"flex" }}>
 
-        {/* ── LEFT PANEL ── */}
+        {/* LEFT PANEL */}
         <div style={{
-          width: "44%", minHeight: "100vh",
-          background: "linear-gradient(155deg, #1e1b4b 0%, #312e81 42%, #4338ca 100%)",
-          display: "flex", flexDirection: "column", justifyContent: "space-between",
-          padding: "52px 56px", position: "relative", overflow: "hidden"
+          width:"44%", minHeight:"100vh",
+          background:"linear-gradient(155deg, #1e1b4b 0%, #312e81 42%, #4338ca 100%)",
+          display:"flex", flexDirection:"column", justifyContent:"space-between",
+          padding:"52px 56px", position:"relative", overflow:"hidden"
         }}>
           {/* decorative blobs */}
           <div style={{ position:"absolute", top:-90, right:-90, width:320, height:320, borderRadius:"50%", background:"rgba(255,255,255,0.03)" }} />
           <div style={{ position:"absolute", bottom:-60, left:-60, width:280, height:280, borderRadius:"50%", background:"rgba(255,255,255,0.03)" }} />
           <div style={{ position:"absolute", top:"38%", left:"25%", width:200, height:200, borderRadius:"50%", background:"rgba(99,102,241,0.12)" }} />
-          {/* dot pattern */}
           <div style={{ position:"absolute", inset:0, backgroundImage:"radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)", backgroundSize:"26px 26px" }} />
 
           <div style={{ position:"relative" }}>
-            <div style={{ width:52, height:52, borderRadius:14, background:"rgba(255,255,255,0.1)", border:"1px solid rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, marginBottom:24 }}>🎓</div>
+            {/* LOGO — no card bg, just the logo image at a good readable size */}
+            <img
+              src="/logo.png"
+              alt="Knowletive"
+              style={{
+                width: 160,
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+                marginBottom: 32,
+                borderRadius: 12,
+              }}
+            />
+
             <p style={{ color:"rgba(199,210,254,0.65)", fontSize:11, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase", marginBottom:10 }}>AI Career Guidance</p>
             <h1 className="font-display" style={{ color:"#fff", fontSize:42, lineHeight:1.18, marginBottom:20 }}>
               Shape Your<br/>Career Future
@@ -178,9 +171,25 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ── RIGHT PANEL (form) ── */}
+        {/* RIGHT PANEL */}
         <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 32px" }}>
           <div className="fade-up" style={{ width:"100%", maxWidth:420 }}>
+
+            {/* LOGO only — no separate name text, logo already has the name in it
+                Medium size: 140px wide so it's very readable */}
+            <div style={{ marginBottom:36 }}>
+              <img
+                src="/logo.png"
+                alt="Knowletive"
+                style={{
+                  width: 140,
+                  height: "auto",
+                  objectFit: "contain",
+                  display: "block",
+                  borderRadius: 10,
+                }}
+              />
+            </div>
 
             <h1 className="font-display" style={{ fontSize:34, fontWeight:900, color:"#111827", marginBottom:6 }}>
               {isReg ? "Create account" : "Welcome back"}
@@ -208,10 +217,7 @@ export default function Home() {
               <span style={{ fontSize:13, color:"#9ca3af" }}>
                 {isReg ? "Already have an account? " : "New here? "}
               </span>
-              <span
-                onClick={() => setIsReg(!isReg)}
-                style={{ fontSize:13, color:"#4f46e5", fontWeight:700, cursor:"pointer" }}
-              >
+              <span onClick={() => setIsReg(!isReg)} style={{ fontSize:13, color:"#4f46e5", fontWeight:700, cursor:"pointer" }}>
                 {isReg ? "Sign in" : "Create a free account"}
               </span>
             </div>
@@ -221,9 +227,7 @@ export default function Home() {
     </>
   );
 
-  /* ══════════════════════════════════════════════════════════════════════
-     DASHBOARD
-  ══════════════════════════════════════════════════════════════════════ */
+  /* ── DASHBOARD ── */
   const sm = getSM(activeStream);
 
   return (
@@ -231,19 +235,25 @@ export default function Home() {
       <FontStyle />
       <div className="dot-bg" style={{ minHeight:"100vh" }}>
 
-        {/* ── NAVBAR ── */}
+        {/* NAVBAR */}
         <nav style={{
           position:"sticky", top:0, zIndex:50,
-          background:"rgba(255,255,255,0.9)", backdropFilter:"blur(18px)",
+          background:"rgba(255,255,255,0.95)", backdropFilter:"blur(18px)",
           borderBottom:"1px solid #f1f5f9",
-          boxShadow:"0 1px 24px rgba(0,0,0,0.04)"
+          boxShadow:"0 1px 24px rgba(0,0,0,0.06)"
         }}>
-          <div style={{ maxWidth:1300, margin:"0 auto", padding:"0 28px", height:66, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-            <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:42, height:42, borderRadius:12, background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:21 }}>🎓</div>
-              <span className="font-display" style={{ fontSize:21, fontWeight:900, color:"#111827" }}>Knowletive</span>
+          <div style={{ maxWidth:1300, margin:"0 auto", padding:"0 28px", height:70, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+
+            {/* LOGO in navbar — just the logo image, name is readable inside it */}
+            <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+              <img
+                src="/logo.png"
+                alt="Knowletive"
+                style={{ height:44, width:"auto", objectFit:"contain", display:"block" }}
+              />
               <span style={{ background:"#eef2ff", color:"#4f46e5", fontSize:9, fontWeight:800, padding:"3px 10px", borderRadius:99, letterSpacing:"0.08em", textTransform:"uppercase" }}>AI Powered</span>
             </div>
+
             <div style={{ display:"flex", alignItems:"center", gap:16 }}>
               <div style={{ textAlign:"right" }}>
                 <p style={{ fontSize:10, color:"#9ca3af", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em" }}>Logged in as</p>
@@ -259,7 +269,7 @@ export default function Home() {
           </div>
         </nav>
 
-        {/* ── MAIN ── */}
+        {/* MAIN */}
         <main style={{ maxWidth:1300, margin:"0 auto", padding:"40px 28px 64px", display:"flex", flexDirection:"column", gap:32 }}>
 
           {/* HERO BANNER */}
@@ -271,6 +281,21 @@ export default function Home() {
             <div style={{ position:"absolute", inset:0, backgroundImage:"radial-gradient(circle, rgba(255,255,255,0.05) 1px, transparent 1px)", backgroundSize:"24px 24px" }} />
             <div style={{ position:"absolute", top:-70, right:-70, width:300, height:300, borderRadius:"50%", background:"rgba(255,255,255,0.03)" }} />
             <div style={{ position:"absolute", bottom:-50, right:160, width:220, height:220, borderRadius:"50%", background:"rgba(99,102,241,0.18)" }} />
+
+            {/* LOGO in hero — white bg pill so logo colours show on dark banner */}
+            <div style={{
+              position:"absolute", top:24, right:32,
+              background:"rgba(255,255,255,0.95)",
+              borderRadius:16, padding:"10px 18px",
+              boxShadow:"0 4px 20px rgba(0,0,0,0.15)",
+            }}>
+              <img
+                src="/logo.png"
+                alt="Knowletive"
+                style={{ height:40, width:"auto", objectFit:"contain", display:"block" }}
+              />
+            </div>
+
             <div style={{ position:"relative" }}>
               <p style={{ color:"rgba(199,210,254,0.7)", fontSize:11, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase", marginBottom:12 }}>🎯 Career Guidance System</p>
               <h1 className="font-display" style={{ color:"#fff", fontSize:40, lineHeight:1.2, marginBottom:14 }}>
@@ -291,7 +316,6 @@ export default function Home() {
 
           {/* FORM CARD */}
           <div className="fade-up delay-1" style={{ background:"#ffffff", borderRadius:24, border:"1px solid #f0f4f8", boxShadow:"0 4px 36px rgba(0,0,0,0.055)", overflow:"hidden" }}>
-
             <div style={{ padding:"22px 36px", borderBottom:"1px solid #f8fafc", display:"flex", alignItems:"center", gap:14 }}>
               <div style={{ width:46, height:46, borderRadius:13, background:"#eef2ff", border:"1px solid #c7d2fe", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>📋</div>
               <div>
@@ -301,13 +325,10 @@ export default function Home() {
             </div>
 
             <div style={{ padding:"32px 36px" }}>
-              {/* 2-col grid */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(210px, 1fr))", gap:20, marginBottom:28 }}>
                 <KField label="Student Name *"  placeholder="Full name"        onChange={v => setStudent({ ...student, name: v })} />
                 <KField label="Mobile Number *" placeholder="+91 00000 00000"  onChange={v => setStudent({ ...student, mobile: v })} />
                 <KField label="State"           placeholder="e.g. Maharashtra" onChange={v => setStudent({ ...student, state: v })} />
-
-                {/* Stream select */}
                 <div>
                   <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#6b7280", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Stream / Field</label>
                   <div style={{ position:"relative" }}>
@@ -324,7 +345,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Quick-select pills */}
               <div style={{ marginBottom:28 }}>
                 <p style={{ fontSize:11, fontWeight:700, color:"#9ca3af", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Quick Select Stream</p>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:10 }}>
@@ -351,7 +371,6 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Action buttons */}
               <div style={{ display:"flex", flexWrap:"wrap", gap:12 }}>
                 <button
                   onClick={saveStudent}
@@ -441,9 +460,7 @@ export default function Home() {
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   CAREER CARD
-══════════════════════════════════════════════════════════════════════════════ */
+/* ── CAREER CARD ── */
 function CareerCard({ item, stream }: { item: Career; stream: string }) {
   const [exp, setExp] = useState(false);
   const sm = getSM(stream);
@@ -461,22 +478,16 @@ function CareerCard({ item, stream }: { item: Career; stream: string }) {
   const extra   = rows.slice(3);
 
   return (
-    <div
-      className="career-card"
-      style={{ background:"#ffffff", borderRadius:20, border:"1px solid #f0f4f8", boxShadow:"0 2px 18px rgba(0,0,0,0.05)", overflow:"hidden" }}
-    >
+    <div className="career-card" style={{ background:"#ffffff", borderRadius:20, border:"1px solid #f0f4f8", boxShadow:"0 2px 18px rgba(0,0,0,0.05)", overflow:"hidden" }}>
       <div style={{ height:4, background:`linear-gradient(90deg, ${sm.accent}, ${sm.accent}80)` }} />
-
       <div style={{ padding:"20px 22px 16px", borderBottom:"1px solid #f8fafc", display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:12 }}>
         <h3 className="font-display" style={{ fontSize:17, fontWeight:700, color:"#111827", lineHeight:1.3, flex:1 }}>{item.course}</h3>
         <div style={{ width:38, height:38, borderRadius:10, background:sm.lightBg, border:`1px solid ${sm.border}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0 }}>{sm.icon}</div>
       </div>
-
       <div style={{ padding:"16px 22px", display:"flex", flexDirection:"column", gap:13 }}>
         {preview.map((r, i) => <DRow key={i} {...r} color={sm.textColor} />)}
         {exp && extra.map((r, i) => <DRow key={i} {...r} color={sm.textColor} />)}
       </div>
-
       {extra.length > 0 && (
         <div style={{ padding:"0 22px 20px" }}>
           <button
@@ -503,7 +514,6 @@ function DRow({ icon, label, value, color }: { icon:string; label:string; value:
   );
 }
 
-/* ── Shared field component ── */
 function KField({ label, placeholder, type="text", onChange }: { label:string; placeholder:string; type?:string; onChange:(v:string)=>void }) {
   return (
     <div>

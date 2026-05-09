@@ -1,11 +1,11 @@
-from services.career_service import get_career_by_stream
+from services.career_service import get_career_by_stream   
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.db import get_db
 
 app = FastAPI()
 
-# CORS
+# CORS--update
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
