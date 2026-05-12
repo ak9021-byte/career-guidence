@@ -1,6 +1,6 @@
 "use client";
-#update
-import { useState } from "react";
+
+import { useState, useRef, useEffect } from "react";
 
 const FontStyle = () => (
   <style>{`
@@ -43,6 +43,14 @@ const FontStyle = () => (
     .delay-2  { animation-delay: 0.14s; }
     .delay-3  { animation-delay: 0.21s; }
 
+    @keyframes chatopen { from { opacity:0; transform:scale(0.92) translateY(20px); } to { opacity:1; transform:scale(1) translateY(0); } }
+    .chat-open { animation: chatopen 0.28s ease both; }
+
+    @keyframes bouncedot { 0%,80%,100% { transform:scale(0); } 40% { transform:scale(1); } }
+    .dot1 { animation: bouncedot 1.2s infinite 0s; }
+    .dot2 { animation: bouncedot 1.2s infinite 0.2s; }
+    .dot3 { animation: bouncedot 1.2s infinite 0.4s; }
+
     ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: #f8fafc; }
     ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
@@ -50,12 +58,6 @@ const FontStyle = () => (
     select { -webkit-appearance: none; appearance: none; }
     button { font-family: inherit; }
     input, select, textarea { font-family: inherit; }
-
-    textarea.k-input:focus {
-      outline: none;
-      border-color: #6366f1 !important;
-      box-shadow: 0 0 0 3px rgba(99,102,241,0.14);
-    }
   `}</style>
 );
 
@@ -68,12 +70,221 @@ const STREAMS = [
   { key: "Other",      label: "Creative & Emerging Fields", icon: "💡",  accent: "#6366f1", lightBg: "#eef2ff", border: "#c7d2fe", textColor: "#4338ca" },
 ];
 
-type Career = { course: string; duration: string; exam: string; course_fee: string; jobs: string; salary: string; };
-type CustomCareer = { course: string; duration: string; exam: string; course_fee: string; jobs: string; salary: string; is_custom: boolean; };
+type Career   = { course: string; duration: string; exam: string; course_fee: string; jobs: string; salary: string; };
+type ChatMsg  = { role: "user" | "assistant"; text: string; };
 
 const getSM = (key: string) => STREAMS.find(s => s.key.toLowerCase() === key.toLowerCase()) ?? STREAMS[0];
 
-const CUSTOM_STREAM = { key: "Custom", label: "Custom Career", icon: "✏️", accent: "#f43f5e", lightBg: "#fff1f5", border: "#fda4af", textColor: "#be123c" };
+/* ── QUICK SUGGESTION CHIPS ── */
+const SUGGESTIONS = [
+  "Best colleges for B.Tech in Maharashtra?",
+  "What is the scope of MBBS in India?",
+  "Top commerce colleges in Delhi?",
+  "Salary after CA in India?",
+  "Best arts colleges in Pune?",
+  "Government jobs after Science stream?",
+  "ITI vs Diploma — which is better?",
+  "Top engineering colleges in Tamil Nadu?",
+];
+
+/* ── CHATBOT COMPONENT ── */
+function ChatBot({ student }: { student: any }) {
+  const [open, setOpen]       = useState(false);
+  const [msgs, setMsgs]       = useState<ChatMsg[]>([
+    { role:"assistant", text:"👋 Hi! I'm your Knowletive Career Assistant.\n\nAsk me anything about:\n• Best colleges by state & domain\n• Career scope & salary\n• Entrance exams & eligibility\n• Course fees & duration\n\nHow can I help you today?" }
+  ]);
+  const [input, setInput]     = useState("");
+  const [loading, setLoading] = useState(false);
+  const [unread, setUnread]   = useState(0);
+  const bottomRef             = useRef<HTMLDivElement>(null);
+  const inputRef              = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) { setUnread(0); setTimeout(() => inputRef.current?.focus(), 100); }
+  }, [open]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
+  }, [msgs, loading]);
+
+  const sendMessage = async (text?: string) => {
+    const q = (text || input).trim();
+    if (!q) return;
+    setInput("");
+    const userMsg: ChatMsg = { role:"user", text: q };
+    setMsgs(prev => [...prev, userMsg]);
+    setLoading(true);
+
+    try {
+      const systemPrompt = `You are a helpful Indian career guidance assistant for Knowletive platform (Training Minds, Placing Talents).
+You specialize in:
+- Recommending best colleges in India by state and domain/stream
+- Career scope, salary ranges, and job opportunities
+- Entrance exams, eligibility criteria, and preparation tips
+- Course fees, duration, and scholarship information
+- Comparing career options for students after 10th and 12th
+
+Student context:
+- Name: ${student.name || "Not provided"}
+- State: ${student.state || "Not provided"}
+- Stream: ${student.stream || "Not provided"}
+
+Always give specific, practical advice. Mention real college names, real salary figures, and real entrance exams. Keep answers concise but complete. Use bullet points for lists. Be encouraging and supportive.`;
+
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: systemPrompt,
+          messages: [
+            ...msgs.filter(m => m.role !== "assistant" || msgs.indexOf(m) > 0).map(m => ({
+              role: m.role,
+              content: m.text
+            })),
+            { role: "user", content: q }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      const reply = data.content?.[0]?.text || "Sorry, I couldn't get a response. Please try again.";
+      setMsgs(prev => [...prev, { role:"assistant", text: reply }]);
+      if (!open) setUnread(n => n + 1);
+    } catch {
+      setMsgs(prev => [...prev, { role:"assistant", text:"Sorry, something went wrong. Please check your connection and try again." }]);
+    }
+    setLoading(false);
+  };
+
+  const handleKey = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
+  return (
+    <>
+      {/* FLOATING BUTTON */}
+      <div style={{ position:"fixed", bottom:28, right:28, zIndex:1000 }}>
+        {!open && (
+          <div style={{ position:"relative" }}>
+            {/* Pulse ring */}
+            <div style={{ position:"absolute", inset:-6, borderRadius:"50%", background:"rgba(99,102,241,0.2)", animation:"kspin 3s linear infinite" }} />
+            {unread > 0 && (
+              <div style={{ position:"absolute", top:-6, right:-6, width:20, height:20, borderRadius:"50%", background:"#ef4444", color:"#fff", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", zIndex:10, boxShadow:"0 2px 8px rgba(239,68,68,0.5)" }}>
+                {unread}
+              </div>
+            )}
+            <button onClick={() => setOpen(true)}
+              style={{ width:60, height:60, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, boxShadow:"0 8px 32px rgba(79,70,229,0.45)", transition:"transform 0.2s" }}
+              onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.1)")}
+              onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}>
+              🎓
+            </button>
+          </div>
+        )}
+
+        {/* CHAT WINDOW */}
+        {open && (
+          <div className="chat-open" style={{ width:380, height:580, borderRadius:24, background:"#fff", boxShadow:"0 24px 80px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", border:"1px solid #e5e7eb" }}>
+
+            {/* Header */}
+            <div style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)", padding:"16px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <div style={{ width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🎓</div>
+                <div>
+                  <p style={{ color:"#fff", fontWeight:700, fontSize:14, lineHeight:1 }}>Knowletive Assistant</p>
+                  <p style={{ color:"rgba(199,210,254,0.85)", fontSize:11, marginTop:3 }}>● Online — Ask about colleges & careers</p>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <button onClick={() => { setMsgs([{ role:"assistant", text:"👋 Hi! I'm your Knowletive Career Assistant. How can I help you today?" }]); }}
+                  style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:700, padding:"5px 10px", cursor:"pointer" }}>
+                  Clear
+                </button>
+                <button onClick={() => setOpen(false)}
+                  style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:8, color:"#fff", fontSize:16, width:30, height:30, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:12, background:"#fafbff" }}>
+              {msgs.map((m, i) => (
+                <div key={i} style={{ display:"flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", gap:8, alignItems:"flex-end" }}>
+                  {m.role === "assistant" && (
+                    <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>🎓</div>
+                  )}
+                  <div style={{
+                    maxWidth:"82%", padding:"10px 14px", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                    background: m.role === "user" ? "linear-gradient(135deg,#4f46e5,#7c3aed)" : "#fff",
+                    color: m.role === "user" ? "#fff" : "#374151",
+                    fontSize:13, lineHeight:1.6, fontWeight:400,
+                    boxShadow: m.role === "user" ? "0 4px 16px rgba(79,70,229,0.25)" : "0 2px 12px rgba(0,0,0,0.06)",
+                    border: m.role === "assistant" ? "1px solid #f0f0f8" : "none",
+                    whiteSpace:"pre-wrap", wordBreak:"break-word"
+                  }}>
+                    {m.text}
+                  </div>
+                  {m.role === "user" && (
+                    <div style={{ width:28, height:28, borderRadius:"50%", background:"#e5e7eb", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>👤</div>
+                  )}
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              {loading && (
+                <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
+                  <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 }}>🎓</div>
+                  <div style={{ background:"#fff", border:"1px solid #f0f0f8", borderRadius:"18px 18px 18px 4px", padding:"12px 16px", display:"flex", gap:5, alignItems:"center", boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
+                    <div className="dot1" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
+                    <div className="dot2" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
+                    <div className="dot3" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+
+            {/* Quick suggestions — only show at start */}
+            {msgs.length <= 1 && (
+              <div style={{ padding:"8px 14px", background:"#fafbff", borderTop:"1px solid #f0f0f8", display:"flex", gap:6, flexWrap:"wrap" }}>
+                {SUGGESTIONS.slice(0, 4).map((s, i) => (
+                  <button key={i} onClick={() => sendMessage(s)}
+                    style={{ fontSize:11, fontWeight:600, color:"#4f46e5", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:99, padding:"5px 10px", cursor:"pointer", whiteSpace:"nowrap" }}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Input */}
+            <div style={{ padding:"12px 14px", background:"#fff", borderTop:"1px solid #f0f4f8", display:"flex", gap:8, alignItems:"center" }}>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKey}
+                placeholder="Ask about colleges, careers, exams..."
+                className="k-input"
+                style={{ flex:1, padding:"10px 14px", borderRadius:12, border:"1.5px solid #e5e7eb", background:"#fafafa", fontSize:13, fontWeight:500, color:"#111827" }}
+              />
+              <button onClick={() => sendMessage()} disabled={loading || !input.trim()}
+                style={{ width:40, height:40, borderRadius:12, background: input.trim() ? "linear-gradient(135deg,#4f46e5,#7c3aed)" : "#f3f4f6", border:"none", cursor: input.trim() ? "pointer" : "default", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, transition:"all 0.18s" }}>
+                {loading ? <span className="kspin" style={{ fontSize:14 }}>⟳</span> : "➤"}
+              </button>
+            </div>
+
+            <div style={{ textAlign:"center", padding:"6px", background:"#fff", borderTop:"1px solid #f9fafb" }}>
+              <p style={{ fontSize:10, color:"#d1d5db", fontWeight:500 }}>Powered by Knowletive AI · Press Enter to send</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
 
 /* ── PDF Generator ── */
 async function generatePDF(student: any, stream: string, drafted: any[], user: any) {
@@ -129,7 +340,6 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
 
   y = 54;
 
-  // Student info
   doc.setFillColor(238, 242, 255);
   doc.roundedRect(margin, y, W - margin * 2, 54, 4, 4, "F");
   doc.setDrawColor(199, 210, 254);
@@ -157,7 +367,6 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
   const normalCareers = drafted.filter((c: any) => !c.is_custom);
   const customCareers = drafted.filter((c: any) => c.is_custom);
 
-  // Normal drafted careers
   if (normalCareers.length > 0) {
     doc.setFillColor(67, 56, 202);
     doc.roundedRect(margin, y, W - margin * 2, 11, 2, 2, "F");
@@ -202,7 +411,6 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
     });
   }
 
-  // Custom careers section in PDF
   if (customCareers.length > 0) {
     if (y > 252) { doc.addPage(); y = 18; }
     doc.setFillColor(244, 63, 94);
@@ -214,11 +422,8 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
     customCareers.forEach((career: any, idx: number) => {
       if (y > 252) { doc.addPage(); y = 18; }
       const detailRows = [
-        ["Duration",    career.duration   ],
-        ["Entrance Exam", career.exam     ],
-        ["Course Fee",  career.course_fee ],
-        ["Job Roles",   career.jobs       ],
-        ["Salary",      career.salary     ],
+        ["Duration", career.duration], ["Entrance Exam", career.exam],
+        ["Course Fee", career.course_fee], ["Job Roles", career.jobs], ["Salary", career.salary],
       ].filter(r => r[1] && r[1].trim() !== "");
 
       const rowsPerCol = Math.max(1, Math.ceil(detailRows.length / 2));
@@ -231,13 +436,10 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
       doc.circle(margin + 11, y + 8.5, 5.5, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(190, 18, 60);
       doc.text(String(idx + 1), margin + 11, y + 10.5, { align: "center" });
-
-      // Custom badge
       doc.setFillColor(244, 63, 94);
       doc.roundedRect(W - margin - 28, y + 4, 26, 7, 2, 2, "F");
       doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(255, 255, 255);
       doc.text("✏ CUSTOM", W - margin - 15, y + 8.8, { align: "center" });
-
       doc.setFont("helvetica", "bold"); doc.setFontSize(10.5); doc.setTextColor(17, 24, 39);
       doc.text(doc.splitTextToSize(career.course, W - margin * 2 - 50)[0], margin + 20, y + 9.5);
 
@@ -259,7 +461,6 @@ async function generatePDF(student: any, stream: string, drafted: any[], user: a
     });
   }
 
-  // Footer
   const pageCount = doc.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
@@ -290,8 +491,6 @@ export default function Home() {
   const [drafted, setDrafted]           = useState<any[]>([]);
   const [pdfLoading, setPdfLoading]     = useState(false);
   const [draftSaved, setDraftSaved]     = useState(false);
-
-  // Custom career form state
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customCareer, setCustomCareer]     = useState({ course:"", duration:"", exam:"", course_fee:"", jobs:"", salary:"" });
   const [customAdded, setCustomAdded]       = useState(false);
@@ -339,11 +538,9 @@ export default function Home() {
 
   const isDrafted = (career: any) => drafted.some(c => c.course === career.course);
 
-  // Add custom career to draft
   const addCustomCareer = () => {
     if (!customCareer.course.trim()) { alert("Please enter at least the career name."); return; }
-    const newCustom = { ...customCareer, is_custom: true };
-    setDrafted(prev => [...prev, newCustom]);
+    setDrafted(prev => [...prev, { ...customCareer, is_custom: true }]);
     setCustomCareer({ course:"", duration:"", exam:"", course_fee:"", jobs:"", salary:"" });
     setShowCustomForm(false);
     setCustomAdded(true);
@@ -353,15 +550,12 @@ export default function Home() {
   const saveDraftToDB = async () => {
     if (drafted.length === 0) { alert("No careers in draft to save."); return; }
     try {
-      const normalDrafted  = drafted.filter((c: any) => !c.is_custom).map(c => c.course);
-      const customDrafted  = drafted.filter((c: any) => c.is_custom);
       await fetch("http://localhost:8000/student", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          ...student,
-          user_id: user.id,
-          drafted_careers: JSON.stringify(normalDrafted),
-          custom_careers:  JSON.stringify(customDrafted),
+          ...student, user_id: user.id,
+          drafted_careers: JSON.stringify(drafted.filter((c:any) => !c.is_custom).map(c => c.course)),
+          custom_careers:  JSON.stringify(drafted.filter((c:any) => c.is_custom)),
         })
       });
       setDraftSaved(true); setTimeout(() => setDraftSaved(false), 3000);
@@ -391,7 +585,8 @@ export default function Home() {
           <div style={{ position:"absolute", top:"38%", left:"25%", width:200, height:200, borderRadius:"50%", background:"rgba(99,102,241,0.12)" }} />
           <div style={{ position:"absolute", inset:0, backgroundImage:"radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)", backgroundSize:"26px 26px" }} />
           <div style={{ position:"relative" }}>
-            <div style={{ background:"rgba(255,255,255,0.95)", borderRadius:22, padding:"18px 26px", display:"inline-block", marginBottom:32, boxShadow:"0 12px 40px rgba(0,0,0,0.28)" }}>              <img src="/logo.png" alt="Knowletive" style={{ height:120, width:"auto", objectFit:"contain", display:"block" }} />
+            <div style={{ background:"rgba(255,255,255,0.95)", borderRadius:22, padding:"18px 26px", display:"inline-block", marginBottom:32, boxShadow:"0 12px 40px rgba(0,0,0,0.28)" }}>
+              <img src="/logo.png" alt="Knowletive" style={{ height:120, width:"auto", objectFit:"contain", display:"block" }} />
             </div>
             <p style={{ color:"rgba(199,210,254,0.65)", fontSize:11, fontWeight:800, letterSpacing:"0.14em", textTransform:"uppercase", marginBottom:10 }}>AI Career Guidance</p>
             <h1 className="font-display" style={{ color:"#fff", fontSize:42, lineHeight:1.18, marginBottom:20 }}>Shape Your<br/>Career Future</h1>
@@ -440,9 +635,9 @@ export default function Home() {
 
         {/* NAVBAR */}
         <nav style={{ position:"sticky", top:0, zIndex:50, background:"rgba(255,255,255,0.95)", backdropFilter:"blur(18px)", borderBottom:"1px solid #f1f5f9", boxShadow:"0 1px 24px rgba(0,0,0,0.06)" }}>
-          <div style={{ maxWidth:1300, margin:"0 auto", padding:"0 28px", height:100, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div style={{ maxWidth:1300, margin:"0 auto", padding:"0 28px", height:90, display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-              <img src="/logo.png" alt="Knowletive" style={{ height:100, width:"auto", objectFit:"contain", display:"block" }} />
+              <img src="/logo.png" alt="Knowletive" style={{ height:72, width:"auto", objectFit:"contain", display:"block" }} />
               <span style={{ background:"#eef2ff", color:"#4f46e5", fontSize:13, fontWeight:800, padding:"6px 16px", borderRadius:99, letterSpacing:"0.08em", textTransform:"uppercase" }}>AI Powered</span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:16 }}>
@@ -527,7 +722,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* ── CUSTOM CAREER SECTION ── */}
+          {/* CUSTOM CAREER */}
           <div className="fade-up delay-1" style={{ background:"#ffffff", borderRadius:24, border:"1.5px solid #fda4af", boxShadow:"0 4px 36px rgba(244,63,94,0.07)", overflow:"hidden" }}>
             <div style={{ padding:"20px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
               <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -538,7 +733,7 @@ export default function Home() {
                 </div>
               </div>
               <button onClick={() => setShowCustomForm(!showCustomForm)}
-                style={{ display:"flex", alignItems:"center", gap:8, padding:"11px 24px", borderRadius:12, fontSize:13, fontWeight:700, cursor:"pointer", border:"1.5px solid #fda4af", background: showCustomForm ? "#fff1f5" : "#fff1f5", color:"#be123c" }}>
+                style={{ display:"flex", alignItems:"center", gap:8, padding:"11px 24px", borderRadius:12, fontSize:13, fontWeight:700, cursor:"pointer", border:"1.5px solid #fda4af", background:"#fff1f5", color:"#be123c" }}>
                 {showCustomForm ? "✕ Close Form" : "✏️ Add Custom Career"}
               </button>
             </div>
@@ -547,24 +742,19 @@ export default function Home() {
               <div style={{ padding:"0 28px 28px", borderTop:"1px solid #fff1f5" }}>
                 <div style={{ background:"#fff8fa", borderRadius:16, padding:"24px", border:"1px solid #fda4af", marginTop:16 }}>
                   <p style={{ fontSize:11, fontWeight:800, color:"#be123c", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:18 }}>✏️ Fill Custom Career Details</p>
-
-                  {/* Course name — required */}
                   <div style={{ marginBottom:16 }}>
                     <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#6b7280", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Career / Course Name *</label>
                     <input value={customCareer.course} onChange={e => setCustomCareer({ ...customCareer, course: e.target.value })}
-                      placeholder="e.g. Drone Pilot, AI Researcher, Content Creator..."
-                      className="k-input"
+                      placeholder="e.g. Drone Pilot, AI Researcher, Content Creator..." className="k-input"
                       style={{ width:"100%", padding:"12px 16px", borderRadius:12, border:"1.5px solid #fda4af", background:"#fff", fontSize:14, fontWeight:500, color:"#111827" }} />
                   </div>
-
-                  {/* Other fields grid — all optional */}
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:14, marginBottom:20 }}>
                     {[
-                      { key:"duration",   label:"Duration (Optional)",      placeholder:"e.g. 2 years, 6 months" },
-                      { key:"exam",       label:"Entrance Exam (Optional)",  placeholder:"e.g. JEE, NEET or None" },
-                      { key:"course_fee", label:"Course Fee (Optional)",     placeholder:"e.g. ₹50,000/year" },
-                      { key:"jobs",       label:"Job Roles (Optional)",      placeholder:"e.g. Pilot, Researcher" },
-                      { key:"salary",     label:"Salary Range (Optional)",   placeholder:"e.g. ₹5-10 LPA" },
+                      { key:"duration", label:"Duration (Optional)", placeholder:"e.g. 2 years, 6 months" },
+                      { key:"exam", label:"Entrance Exam (Optional)", placeholder:"e.g. JEE, NEET or None" },
+                      { key:"course_fee", label:"Course Fee (Optional)", placeholder:"e.g. ₹50,000/year" },
+                      { key:"jobs", label:"Job Roles (Optional)", placeholder:"e.g. Pilot, Researcher" },
+                      { key:"salary", label:"Salary Range (Optional)", placeholder:"e.g. ₹5-10 LPA" },
                     ].map(f => (
                       <div key={f.key}>
                         <label style={{ display:"block", fontSize:11, fontWeight:700, color:"#6b7280", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>{f.label}</label>
@@ -574,18 +764,11 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-
                   <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
-                    <button onClick={addCustomCareer}
-                      style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 28px", borderRadius:12, fontSize:14, fontWeight:700, cursor:"pointer", background:"linear-gradient(135deg,#f43f5e,#be123c)", color:"#fff", border:"none", boxShadow:"0 6px 20px rgba(244,63,94,0.28)" }}>
-                      ✅ Add to Draft
-                    </button>
+                    <button onClick={addCustomCareer} style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 28px", borderRadius:12, fontSize:14, fontWeight:700, cursor:"pointer", background:"linear-gradient(135deg,#f43f5e,#be123c)", color:"#fff", border:"none", boxShadow:"0 6px 20px rgba(244,63,94,0.28)" }}>✅ Add to Draft</button>
                     <button onClick={() => { setCustomCareer({ course:"", duration:"", exam:"", course_fee:"", jobs:"", salary:"" }); setShowCustomForm(false); }}
-                      style={{ padding:"12px 20px", borderRadius:12, fontSize:13, fontWeight:700, cursor:"pointer", background:"#f9fafb", border:"1.5px solid #e5e7eb", color:"#6b7280" }}>
-                      Cancel
-                    </button>
+                      style={{ padding:"12px 20px", borderRadius:12, fontSize:13, fontWeight:700, cursor:"pointer", background:"#f9fafb", border:"1.5px solid #e5e7eb", color:"#6b7280" }}>Cancel</button>
                   </div>
-
                   {customAdded && (
                     <div style={{ marginTop:14, background:"#ecfdf5", border:"1px solid #6ee7b7", borderRadius:10, padding:"10px 16px", display:"flex", alignItems:"center", gap:8 }}>
                       <span style={{ fontSize:16 }}>✅</span>
@@ -623,11 +806,9 @@ export default function Home() {
                 </div>
               </div>
               <div style={{ padding:"20px 28px", display:"flex", flexWrap:"wrap", gap:10 }}>
-                {drafted.map((c: any, i) => (
+                {drafted.map((c:any, i) => (
                   <div key={i} style={{ background: c.is_custom ? "#fff1f5" : "#eef2ff", border:`1px solid ${c.is_custom ? "#fda4af" : "#c7d2fe"}`, borderRadius:10, padding:"8px 14px", display:"flex", alignItems:"center", gap:8 }}>
-                    <span style={{ fontSize:12, fontWeight:700, color: c.is_custom ? "#be123c" : "#4338ca" }}>
-                      {c.is_custom ? "✏️" : ""} {i + 1}. {c.course}
-                    </span>
+                    <span style={{ fontSize:12, fontWeight:700, color: c.is_custom ? "#be123c" : "#4338ca" }}>{c.is_custom ? "✏️" : ""} {i+1}. {c.course}</span>
                     <button onClick={() => toggleDraft(c)} style={{ background:"none", border:"none", cursor:"pointer", color: c.is_custom ? "#fda4af" : "#a5b4fc", fontSize:14, lineHeight:1, padding:0 }}>✕</button>
                   </div>
                 ))}
@@ -687,6 +868,9 @@ export default function Home() {
           )}
         </main>
       </div>
+
+      {/* FLOATING CHATBOT */}
+      <ChatBot student={student} />
     </>
   );
 }

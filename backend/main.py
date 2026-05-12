@@ -21,21 +21,33 @@ app.add_middleware(
 def login(data: dict):
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
-        email    = data.get("email", "").strip()
+        cursor = db.cursor()
+
+        email = data.get("email", "").strip()
         password = data.get("password", "").strip()
+
         cursor.execute(
-            "SELECT * FROM users WHERE email=%s AND password=%s",
+            "SELECT id, name, email FROM users WHERE email=%s AND password=%s",
             (email, password)
         )
-        user = cursor.fetchone()
+
+        row = cursor.fetchone()
+
         db.close()
-        if user:
+
+        if row:
+            user = {
+                "id": row[0],
+                "name": row[1],
+                "email": row[2]
+            }
+
             return {"status": "success", "user": user}
+
         return {"status": "failed", "message": "Invalid credentials"}
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
 
 @app.post("/register")
 def register(data: dict):
@@ -96,14 +108,39 @@ def save_student(data: dict):
 def get_students():
     try:
         db = get_db()
-        cursor = db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM students ORDER BY created_at DESC")
+        cursor = db.cursor()
+
+        cursor.execute("""
+            SELECT id, user_id, name, stream, mobile,
+                   state, drafted_careers,
+                   custom_careers, created_at
+            FROM students
+            ORDER BY created_at DESC
+        """)
+
         rows = cursor.fetchall()
+
+        students = []
+
+        for row in rows:
+            students.append({
+                "id": row[0],
+                "user_id": row[1],
+                "name": row[2],
+                "stream": row[3],
+                "mobile": row[4],
+                "state": row[5],
+                "drafted_careers": row[6],
+                "custom_careers": row[7],
+                "created_at": str(row[8])
+            })
+
         db.close()
-        return {"status": "success", "data": rows}
+
+        return {"status": "success", "data": students}
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
 
 # ──────────────────────────────────────────────
 #  ROADMAP  –  supports all 6 stream keys

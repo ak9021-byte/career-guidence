@@ -1,9 +1,10 @@
-import mysql.connector
+import psycopg2
 
 def get_db():
-    return mysql.connector.connect(
+    return psycopg2.connect(
         host="localhost",
-        user="root",
+        port="5433",
+        user="postgres",
         password="9999",
         database="career_bot"
     )
