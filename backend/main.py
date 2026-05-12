@@ -1,11 +1,10 @@
-from services.career_service import get_career_by_stream   
+from services.career_service import get_career_by_stream
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from db.db import get_db
 
 app = FastAPI()
 
-# CORS--update
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -74,13 +73,34 @@ def save_student(data: dict):
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
-            "INSERT INTO students (user_id, name, stream, mobile, state) VALUES (%s, %s, %s, %s, %s)",
-            (data.get("user_id"), data.get("name"), data.get("stream"),
-             data.get("mobile"), data.get("state"))
+            """INSERT INTO students (user_id, name, stream, mobile, state, drafted_careers, custom_careers)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+            (
+                data.get("user_id"),
+                data.get("name"),
+                data.get("stream"),
+                data.get("mobile"),
+                data.get("state"),
+                data.get("drafted_careers"),
+                data.get("custom_careers"),
+            )
         )
         db.commit()
         db.close()
         return {"status": "success", "message": "Student saved successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/students")
+def get_students():
+    try:
+        db = get_db()
+        cursor = db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM students ORDER BY created_at DESC")
+        rows = cursor.fetchall()
+        db.close()
+        return {"status": "success", "data": rows}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
