@@ -1,3 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pydantic
+httpx
+asyncpg
+openai
+google-generativeai
+python-jose
+passlib[bcrypt]
+
 langchain
 langchain-community
 langchain-openai
