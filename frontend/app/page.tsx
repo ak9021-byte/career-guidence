@@ -77,6 +77,7 @@ type ChatMsg  = { role: "user" | "assistant"; text: string; };
 const getSM = (key: string) => STREAMS.find(s => s.key.toLowerCase() === key.toLowerCase()) ?? STREAMS[0];
 
 const validateEmail = (email: string) => {
+  if (!email) return "Email is required";
   const lower = email.toLowerCase();
   if (email !== lower) return "Email must be in lowercase only";
   if (!lower.endsWith("@gmail.com")) return "Only @gmail.com emails are allowed";
@@ -502,10 +503,13 @@ export default function Home() {
   const [showCustomForm, setShowCustomForm] = useState(false);
   const [customCareer, setCustomCareer]     = useState({ course:"", duration:"", exam:"", course_fee:"", jobs:"", salary:"" });
   const [customAdded, setCustomAdded]       = useState(false);
+  const [loginEmailError, setLoginEmailError] = useState("");
+  const [regEmailError, setRegEmailError]     = useState("");
 
   const handleLogin = async () => {
     const emailError = validateEmail(loginForm.email);
-    if (emailError) { alert(emailError); return; }
+    if (emailError) { setLoginEmailError(emailError); return; }
+    setLoginEmailError("");
     try {
       const r = await fetch(`${API}/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(loginForm) });
       const d = await r.json();
@@ -515,7 +519,8 @@ export default function Home() {
 
   const handleRegister = async () => {
     const emailError = validateEmail(regForm.email);
-    if (emailError) { alert(emailError); return; }
+    if (emailError) { setRegEmailError(emailError); return; }
+    setRegEmailError("");
     try {
       const r = await fetch(`${API}/register`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(regForm) });
       const d = await r.json();
@@ -625,7 +630,21 @@ export default function Home() {
             <p style={{ color:"#6b7280", fontSize:14, fontWeight:400, marginBottom:36, lineHeight:1.6 }}>{isReg ? "Join Knowletive and start exploring your ideal career." : "Sign in to continue to your career dashboard."}</p>
             <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
               {isReg && <KField label="Full Name" placeholder="Your full name" onChange={v => setRegForm({ ...regForm, name: v })} />}
-              <KField label="Email Address" placeholder="you@email.com" type="email" onChange={v => isReg ? setRegForm({ ...regForm, email: v }) : setLoginForm({ ...loginForm, email: v })} />
+              <KField label="Email Address" placeholder="you@email.com" type="email"
+                onChange={v => {
+                  if (isReg) { setRegForm({ ...regForm, email: v }); setRegEmailError(""); }
+                  else { setLoginForm({ ...loginForm, email: v }); setLoginEmailError(""); }
+                }} />
+              {isReg && regEmailError && (
+                <p style={{ color:"#dc2626", fontSize:12, fontWeight:600, marginTop:-10 }}>
+                  ⚠ {regEmailError}
+                </p>
+              )}
+              {!isReg && loginEmailError && (
+                <p style={{ color:"#dc2626", fontSize:12, fontWeight:600, marginTop:-10 }}>
+                  ⚠ {loginEmailError}
+                </p>
+              )}
               <KField label="Password" placeholder="••••••••" type="password" onChange={v => isReg ? setRegForm({ ...regForm, password: v }) : setLoginForm({ ...loginForm, password: v })} />
             </div>
             <button onClick={isReg ? handleRegister : handleLogin} style={{ width:"100%", marginTop:28, padding:"15px 0", borderRadius:14, background:"linear-gradient(135deg,#4f46e5,#7c3aed)", color:"#fff", fontWeight:700, fontSize:15, border:"none", cursor:"pointer", boxShadow:"0 10px 28px rgba(79,70,229,0.3)" }}>
