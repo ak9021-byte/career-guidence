@@ -76,6 +76,13 @@ type ChatMsg  = { role: "user" | "assistant"; text: string; };
 
 const getSM = (key: string) => STREAMS.find(s => s.key.toLowerCase() === key.toLowerCase()) ?? STREAMS[0];
 
+const validateEmail = (email: string) => {
+  const lower = email.toLowerCase();
+  if (email !== lower) return "Email must be in lowercase only";
+  if (!lower.endsWith("@gmail.com")) return "Only @gmail.com emails are allowed";
+  return null;
+};
+
 /* ── QUICK SUGGESTION CHIPS ── */
 const SUGGESTIONS = [
   "Best colleges for B.Tech in Maharashtra?",
@@ -497,6 +504,8 @@ export default function Home() {
   const [customAdded, setCustomAdded]       = useState(false);
 
   const handleLogin = async () => {
+    const emailError = validateEmail(loginForm.email);
+    if (emailError) { alert(emailError); return; }
     try {
       const r = await fetch(`${API}/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(loginForm) });
       const d = await r.json();
@@ -505,6 +514,8 @@ export default function Home() {
   };
 
   const handleRegister = async () => {
+    const emailError = validateEmail(regForm.email);
+    if (emailError) { alert(emailError); return; }
     try {
       const r = await fetch(`${API}/register`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(regForm) });
       const d = await r.json();
@@ -521,6 +532,9 @@ export default function Home() {
   };
 
   const getRoadmap = async () => {
+    if (!student.name.trim()) { alert("Please enter student name!"); return; }
+    if (!student.mobile.trim()) { alert("Please enter mobile number!"); return; }
+    if (!student.state.trim()) { alert("Please enter state!"); return; }
     setLoading(true); setResult([]); setSearch(""); setDrafted([]);
     try {
       const r = await fetch(`${API}/roadmap`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ stream: student.stream.toLowerCase() }) });
