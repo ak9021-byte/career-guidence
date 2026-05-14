@@ -10,6 +10,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "https://career-guidence-topaz.vercel.app",
+        "https://career-guidence-alo1ifsk9-akash-gaikwad-s-projects.vercel.app",
         "https://*.vercel.app",
     ],
     allow_credentials=True,
