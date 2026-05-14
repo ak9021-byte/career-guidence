@@ -1,5 +1,6 @@
 "use client";
 
+const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 import { useState, useRef, useEffect } from "react";
 
 const FontStyle = () => (
@@ -497,7 +498,7 @@ export default function Home() {
 
   const handleLogin = async () => {
     try {
-      const r = await fetch("http://localhost:8000/login", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(loginForm) });
+      const r = await fetch(`${API}/login`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(loginForm) });
       const d = await r.json();
       if (d.status === "success") setUser(d.user); else alert("Invalid Email or Password");
     } catch { alert("Backend not connected"); }
@@ -505,7 +506,7 @@ export default function Home() {
 
   const handleRegister = async () => {
     try {
-      const r = await fetch("http://localhost:8000/register", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(regForm) });
+      const r = await fetch(`${API}/register`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(regForm) });
       const d = await r.json();
       alert(d.message);
       if (d.status === "success") setIsReg(false);
@@ -514,7 +515,7 @@ export default function Home() {
 
   const saveStudent = async () => {
     try {
-      await fetch("http://localhost:8000/student", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ ...student, user_id: user.id }) });
+      await fetch(`${API}/student`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ ...student, user_id: user.id }) });
       setSaved(true); setTimeout(() => setSaved(false), 3000);
     } catch { alert("Error Saving Student"); }
   };
@@ -522,7 +523,7 @@ export default function Home() {
   const getRoadmap = async () => {
     setLoading(true); setResult([]); setSearch(""); setDrafted([]);
     try {
-      const r = await fetch("http://localhost:8000/roadmap", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ stream: student.stream.toLowerCase() }) });
+      const r = await fetch(`${API}/roadmap`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ stream: student.stream.toLowerCase() }) });
       const d = await r.json();
       setResult(d.data ?? []); setActiveStream(student.stream);
     } catch { alert("Error Generating Career Roadmap"); }
@@ -550,7 +551,7 @@ export default function Home() {
   const saveDraftToDB = async () => {
     if (drafted.length === 0) { alert("No careers in draft to save."); return; }
     try {
-      await fetch("http://localhost:8000/student", {
+      await fetch("${API}/student", {
         method:"POST", headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
           ...student, user_id: user.id,
