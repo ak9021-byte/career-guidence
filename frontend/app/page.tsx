@@ -97,196 +97,309 @@ const SUGGESTIONS = [
 ];
 
 /* ── CHATBOT COMPONENT ── */
+/* ═══════════════════════════════════════════════════════════════
+   DROP-IN REPLACEMENT for the ChatBot component in your page.tsx
+   
+   USES YOUR OWN BACKEND DATA — NO EXTERNAL API NEEDED
+   
+   Flow:
+   1. User clicks 🎓 button
+   2. Selects a Stream (Science, Commerce, Arts, etc.)
+   3. Chatbot fetches from YOUR /roadmap API
+   4. Shows top careers with exam, fee, salary info
+   5. User can filter/search within results
+═══════════════════════════════════════════════════════════════ */
+
+const CHAT_STREAMS = [
+  { key: "science",    label: "Science & Technology",   icon: "⚗️"  },
+  { key: "commerce",   label: "Commerce & Finance",     icon: "📈"  },
+  { key: "arts",       label: "Arts & Humanities",      icon: "🎨"  },
+  { key: "vocational", label: "Vocational & Technical", icon: "🔧"  },
+  { key: "government", label: "Government Jobs",        icon: "🏛️" },
+  { key: "other",      label: "Creative & Emerging",    icon: "💡"  },
+];
+
 function ChatBot({ student }: { student: any }) {
-  const [open, setOpen]       = useState(false);
-  const [msgs, setMsgs]       = useState<ChatMsg[]>([
-    { role:"assistant", text:"👋 Hi! I'm your Knowletive Career Assistant.\n\nAsk me anything about:\n• Best colleges by state & domain\n• Career scope & salary\n• Entrance exams & eligibility\n• Course fees & duration\n\nHow can I help you today?" }
-  ]);
-  const [input, setInput]     = useState("");
-  const [loading, setLoading] = useState(false);
-  const [unread, setUnread]   = useState(0);
-  const bottomRef             = useRef<HTMLDivElement>(null);
-  const inputRef              = useRef<HTMLInputElement>(null);
+  const [open, setOpen]               = useState(false);
+  const [step, setStep]               = useState<"home" | "stream" | "results">("home");
+  const [selectedStream, setSelectedStream] = useState<any>(null);
+  const [careers, setCareers]         = useState<any[]>([]);
+  const [filtered, setFiltered]       = useState<any[]>([]);
+  const [loading, setLoading]         = useState(false);
+  const [search, setSearch]           = useState("");
+  const [unread, setUnread]           = useState(0);
+  const [error, setError]             = useState("");
+  const bottomRef                     = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (open) { setUnread(0); setTimeout(() => inputRef.current?.focus(), 100); }
+    if (open) setUnread(0);
   }, [open]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior:"smooth" });
-  }, [msgs, loading]);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [careers, loading]);
 
-  const sendMessage = async (text?: string) => {
-    const q = (text || input).trim();
-    if (!q) return;
-    setInput("");
-    const userMsg: ChatMsg = { role:"user", text: q };
-    setMsgs(prev => [...prev, userMsg]);
+  // filter careers when search changes
+  useEffect(() => {
+    if (!search.trim()) {
+      setFiltered(careers.slice(0, 15));
+    } else {
+      const q = search.toLowerCase();
+      setFiltered(
+        careers
+          .filter(c =>
+            c.course?.toLowerCase().includes(q) ||
+            c.exam?.toLowerCase().includes(q) ||
+            c.jobs?.toLowerCase().includes(q)
+          )
+          .slice(0, 15)
+      );
+    }
+  }, [search, careers]);
+
+  const handleStreamSelect = async (stream: any) => {
+    setSelectedStream(stream);
+    setStep("results");
     setLoading(true);
+    setError("");
+    setCareers([]);
+    setFiltered([]);
+    setSearch("");
 
     try {
-      const systemPrompt = `You are a helpful Indian career guidance assistant for Knowletive platform (Training Minds, Placing Talents).
-You specialize in:
-- Recommending best colleges in India by state and domain/stream
-- Career scope, salary ranges, and job opportunities
-- Entrance exams, eligibility criteria, and preparation tips
-- Course fees, duration, and scholarship information
-- Comparing career options for students after 10th and 12th
-
-Student context:
-- Name: ${student.name || "Not provided"}
-- State: ${student.state || "Not provided"}
-- Stream: ${student.stream || "Not provided"}
-
-Always give specific, practical advice. Mention real college names, real salary figures, and real entrance exams. Keep answers concise but complete. Use bullet points for lists. Be encouraging and supportive.`;
-
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const r = await fetch(`${API}/roadmap`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: systemPrompt,
-          messages: [
-            ...msgs.filter(m => m.role !== "assistant" || msgs.indexOf(m) > 0).map(m => ({
-              role: m.role,
-              content: m.text
-            })),
-            { role: "user", content: q }
-          ]
-        })
+        body: JSON.stringify({ stream: stream.key })
       });
-
-      const data = await response.json();
-      const reply = data.content?.[0]?.text || "Sorry, I couldn't get a response. Please try again.";
-      setMsgs(prev => [...prev, { role:"assistant", text: reply }]);
+      const d = await r.json();
+      const data = d.data ?? [];
+      setCareers(data);
+      setFiltered(data.slice(0, 15));
+      if (data.length === 0) setError("No careers found for this stream.");
       if (!open) setUnread(n => n + 1);
     } catch {
-      setMsgs(prev => [...prev, { role:"assistant", text:"Sorry, something went wrong. Please check your connection and try again." }]);
+      setError("Could not load data. Please check your connection.");
     }
     setLoading(false);
   };
 
-  const handleKey = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const resetChat = () => {
+    setStep("home");
+    setSelectedStream(null);
+    setCareers([]);
+    setFiltered([]);
+    setSearch("");
+    setError("");
   };
 
   return (
     <>
-      {/* FLOATING BUTTON */}
-      <div style={{ position:"fixed", bottom:28, right:28, zIndex:1000 }}>
+      {/* ── FLOATING BUTTON ── */}
+      <div style={{ position: "fixed", bottom: 28, right: 28, zIndex: 1000 }}>
         {!open && (
-          <div style={{ position:"relative" }}>
-            {/* Pulse ring */}
-            <div style={{ position:"absolute", inset:-6, borderRadius:"50%", background:"rgba(99,102,241,0.2)", animation:"kspin 3s linear infinite" }} />
+          <div style={{ position: "relative" }}>
+            <div style={{ position: "absolute", inset: -6, borderRadius: "50%", background: "rgba(99,102,241,0.2)", animation: "kspin 3s linear infinite", pointerEvents: "none" }} />
             {unread > 0 && (
-              <div style={{ position:"absolute", top:-6, right:-6, width:20, height:20, borderRadius:"50%", background:"#ef4444", color:"#fff", fontSize:11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", zIndex:10, boxShadow:"0 2px 8px rgba(239,68,68,0.5)" }}>
+              <div style={{ position: "absolute", top: -6, right: -6, width: 20, height: 20, borderRadius: "50%", background: "#ef4444", color: "#fff", fontSize: 11, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", zIndex: 11 }}>
                 {unread}
               </div>
             )}
-            <button onClick={() => setOpen(true)}
-              style={{ width:60, height:60, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", border:"none", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", fontSize:26, boxShadow:"0 8px 32px rgba(79,70,229,0.45)", transition:"transform 0.2s" }}
-              onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.1)")}
-              onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}>
+            <button
+              onClick={() => setOpen(true)}
+              style={{ width: 60, height: 60, borderRadius: "50%", background: "linear-gradient(135deg,#4f46e5,#7c3aed)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: "0 8px 32px rgba(79,70,229,0.45)", position: "relative", zIndex: 10 }}>
               🎓
             </button>
           </div>
         )}
 
-        {/* CHAT WINDOW */}
+        {/* ── CHAT WINDOW ── */}
         {open && (
-          <div className="chat-open" style={{ width:380, height:580, borderRadius:24, background:"#fff", boxShadow:"0 24px 80px rgba(0,0,0,0.18)", display:"flex", flexDirection:"column", overflow:"hidden", border:"1px solid #e5e7eb" }}>
+          <div className="chat-open" style={{ width: 380, height: 600, borderRadius: 24, background: "#fff", boxShadow: "0 24px 80px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflow: "hidden", border: "1px solid #e5e7eb" }}>
 
             {/* Header */}
-            <div style={{ background:"linear-gradient(135deg,#4f46e5,#7c3aed)", padding:"16px 18px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                <div style={{ width:40, height:40, borderRadius:"50%", background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20 }}>🎓</div>
+            <div style={{ background: "linear-gradient(135deg,#4f46e5,#7c3aed)", padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 38, height: 38, borderRadius: "50%", background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🎓</div>
                 <div>
-                  <p style={{ color:"#fff", fontWeight:700, fontSize:14, lineHeight:1 }}>Knowletive Assistant</p>
-                  <p style={{ color:"rgba(199,210,254,0.85)", fontSize:11, marginTop:3 }}>● Online — Ask about colleges & careers</p>
+                  <p style={{ color: "#fff", fontWeight: 700, fontSize: 13, lineHeight: 1 }}>Career Explorer</p>
+                  <p style={{ color: "rgba(199,210,254,0.85)", fontSize: 10, marginTop: 3 }}>
+                    {selectedStream ? `● ${selectedStream.label} — ${careers.length} careers` : "● Select a stream to explore careers"}
+                  </p>
                 </div>
               </div>
-              <div style={{ display:"flex", gap:8 }}>
-                <button onClick={() => { setMsgs([{ role:"assistant", text:"👋 Hi! I'm your Knowletive Career Assistant. How can I help you today?" }]); }}
-                  style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:8, color:"#fff", fontSize:11, fontWeight:700, padding:"5px 10px", cursor:"pointer" }}>
-                  Clear
-                </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                {step !== "home" && (
+                  <button onClick={resetChat}
+                    style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, fontWeight: 700, padding: "5px 10px", cursor: "pointer" }}>
+                    🏠 Home
+                  </button>
+                )}
                 <button onClick={() => setOpen(false)}
-                  style={{ background:"rgba(255,255,255,0.15)", border:"none", borderRadius:8, color:"#fff", fontSize:16, width:30, height:30, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                  style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 8, color: "#fff", fontSize: 16, width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   ✕
                 </button>
               </div>
             </div>
 
-            {/* Messages */}
-            <div style={{ flex:1, overflowY:"auto", padding:"16px", display:"flex", flexDirection:"column", gap:12, background:"#fafbff" }}>
-              {msgs.map((m, i) => (
-                <div key={i} style={{ display:"flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", gap:8, alignItems:"flex-end" }}>
-                  {m.role === "assistant" && (
-                    <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>🎓</div>
-                  )}
-                  <div style={{
-                    maxWidth:"82%", padding:"10px 14px", borderRadius: m.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                    background: m.role === "user" ? "linear-gradient(135deg,#4f46e5,#7c3aed)" : "#fff",
-                    color: m.role === "user" ? "#fff" : "#374151",
-                    fontSize:13, lineHeight:1.6, fontWeight:400,
-                    boxShadow: m.role === "user" ? "0 4px 16px rgba(79,70,229,0.25)" : "0 2px 12px rgba(0,0,0,0.06)",
-                    border: m.role === "assistant" ? "1px solid #f0f0f8" : "none",
-                    whiteSpace:"pre-wrap", wordBreak:"break-word"
-                  }}>
-                    {m.text}
-                  </div>
-                  {m.role === "user" && (
-                    <div style={{ width:28, height:28, borderRadius:"50%", background:"#e5e7eb", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, flexShrink:0 }}>👤</div>
-                  )}
-                </div>
-              ))}
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: "auto", background: "#fafbff" }}>
 
-              {/* Typing indicator */}
-              {loading && (
-                <div style={{ display:"flex", alignItems:"flex-end", gap:8 }}>
-                  <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#4f46e5,#7c3aed)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 }}>🎓</div>
-                  <div style={{ background:"#fff", border:"1px solid #f0f0f8", borderRadius:"18px 18px 18px 4px", padding:"12px 16px", display:"flex", gap:5, alignItems:"center", boxShadow:"0 2px 12px rgba(0,0,0,0.06)" }}>
-                    <div className="dot1" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
-                    <div className="dot2" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
-                    <div className="dot3" style={{ width:7, height:7, borderRadius:"50%", background:"#6366f1" }} />
+              {/* ── HOME ── */}
+              {step === "home" && (
+                <div style={{ padding: 16 }}>
+                  <div style={{ background: "linear-gradient(135deg,#eef2ff,#f5f3ff)", borderRadius: 16, padding: 16, marginBottom: 16, border: "1px solid #c7d2fe" }}>
+                    <p style={{ fontSize: 15, fontWeight: 800, color: "#4338ca", marginBottom: 6 }}>👋 Career Explorer!</p>
+                    <p style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>
+                      Explore top career options from our database. Select a stream below to see courses, entrance exams, fees and salary details!
+                    </p>
+                  </div>
+
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+                    Choose a Stream:
+                  </p>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {CHAT_STREAMS.map((stream, i) => (
+                      <button key={i} onClick={() => handleStreamSelect(stream)}
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderRadius: 14, background: "#fff", border: "1.5px solid #e5e7eb", cursor: "pointer", transition: "all 0.15s", textAlign: "left" }}
+                        onMouseEnter={e => { e.currentTarget.style.background = "#eef2ff"; e.currentTarget.style.borderColor = "#6366f1"; }}
+                        onMouseLeave={e => { e.currentTarget.style.background = "#fff"; e.currentTarget.style.borderColor = "#e5e7eb"; }}>
+                        <span style={{ fontSize: 22, flexShrink: 0 }}>{stream.icon}</span>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1 }}>{stream.label}</p>
+                          <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 3 }}>Tap to explore careers →</p>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
-              <div ref={bottomRef} />
-            </div>
 
-            {/* Quick suggestions — only show at start */}
-            {msgs.length <= 1 && (
-              <div style={{ padding:"8px 14px", background:"#fafbff", borderTop:"1px solid #f0f0f8", display:"flex", gap:6, flexWrap:"wrap" }}>
-                {SUGGESTIONS.slice(0, 4).map((s, i) => (
-                  <button key={i} onClick={() => sendMessage(s)}
-                    style={{ fontSize:11, fontWeight:600, color:"#4f46e5", background:"#eef2ff", border:"1px solid #c7d2fe", borderRadius:99, padding:"5px 10px", cursor:"pointer", whiteSpace:"nowrap" }}>
-                    {s}
+              {/* ── LOADING ── */}
+              {step === "results" && loading && (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg,#4f46e5,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🎓</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <div className="dot1" style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />
+                    <div className="dot2" style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />
+                    <div className="dot3" style={{ width: 8, height: 8, borderRadius: "50%", background: "#6366f1" }} />
+                  </div>
+                  <p style={{ fontSize: 13, color: "#6b7280", fontWeight: 600 }}>Loading careers...</p>
+                </div>
+              )}
+
+              {/* ── ERROR ── */}
+              {step === "results" && !loading && error && (
+                <div style={{ padding: 20, textAlign: "center" }}>
+                  <p style={{ fontSize: 32, marginBottom: 10 }}>😕</p>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>{error}</p>
+                  <button onClick={resetChat} style={{ marginTop: 14, padding: "10px 20px", borderRadius: 10, background: "#eef2ff", border: "1.5px solid #c7d2fe", color: "#4338ca", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                    ← Go Back
                   </button>
-                ))}
-              </div>
-            )}
+                </div>
+              )}
 
-            {/* Input */}
-            <div style={{ padding:"12px 14px", background:"#fff", borderTop:"1px solid #f0f4f8", display:"flex", gap:8, alignItems:"center" }}>
-              <input
-                ref={inputRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={handleKey}
-                placeholder="Ask about colleges, careers, exams..."
-                className="k-input"
-                style={{ flex:1, padding:"10px 14px", borderRadius:12, border:"1.5px solid #e5e7eb", background:"#fafafa", fontSize:13, fontWeight:500, color:"#111827" }}
-              />
-              <button onClick={() => sendMessage()} disabled={loading || !input.trim()}
-                style={{ width:40, height:40, borderRadius:12, background: input.trim() ? "linear-gradient(135deg,#4f46e5,#7c3aed)" : "#f3f4f6", border:"none", cursor: input.trim() ? "pointer" : "default", display:"flex", alignItems:"center", justifyContent:"center", fontSize:16, flexShrink:0, transition:"all 0.18s" }}>
-                {loading ? <span className="kspin" style={{ fontSize:14 }}>⟳</span> : "➤"}
-              </button>
+              {/* ── RESULTS ── */}
+              {step === "results" && !loading && !error && filtered.length > 0 && (
+                <div style={{ padding: 12 }}>
+                  {/* Search bar */}
+                  <div style={{ position: "relative", marginBottom: 12 }}>
+                    <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "#9ca3af" }}>🔍</span>
+                    <input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Search course, exam or job..."
+                      className="k-input"
+                      style={{ width: "100%", padding: "9px 12px 9px 32px", borderRadius: 11, border: "1.5px solid #e5e7eb", background: "#fff", fontSize: 12, fontWeight: 500, color: "#111827" }}
+                    />
+                  </div>
+
+                  {/* Info bar */}
+                  <div style={{ background: "#eef2ff", borderRadius: 10, padding: "8px 12px", marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <p style={{ fontSize: 11, fontWeight: 700, color: "#4338ca" }}>
+                      {selectedStream?.icon} {selectedStream?.label}
+                    </p>
+                    <p style={{ fontSize: 11, color: "#6366f1", fontWeight: 700 }}>
+                      {filtered.length} of {careers.length} shown
+                    </p>
+                  </div>
+
+                  {/* Career cards */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {filtered.map((career, i) => (
+                      <div key={i} style={{ background: "#fff", borderRadius: 14, border: "1px solid #f0f4f8", padding: "12px 14px", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+                        {/* Course name */}
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 10 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 6, background: "#eef2ff", border: "1px solid #c7d2fe", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#4338ca", flexShrink: 0 }}>
+                            {i + 1}
+                          </div>
+                          <p style={{ fontSize: 13, fontWeight: 700, color: "#111827", lineHeight: 1.3 }}>{career.course}</p>
+                        </div>
+
+                        {/* Details grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                          {career.duration && career.duration !== "nan" && (
+                            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "6px 8px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>Duration</p>
+                              <p style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginTop: 2 }}>{career.duration}</p>
+                            </div>
+                          )}
+                          {career.exam && career.exam !== "nan" && (
+                            <div style={{ background: "#f8fafc", borderRadius: 8, padding: "6px 8px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>Entrance Exam</p>
+                              <p style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginTop: 2 }}>{career.exam}</p>
+                            </div>
+                          )}
+                          {career.course_fee && career.course_fee !== "nan" && (
+                            <div style={{ background: "#fff7ed", borderRadius: 8, padding: "6px 8px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>Course Fee</p>
+                              <p style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginTop: 2 }}>{career.course_fee}</p>
+                            </div>
+                          )}
+                          {career.salary && career.salary !== "nan" && (
+                            <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "6px 8px" }}>
+                              <p style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>Salary</p>
+                              <p style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginTop: 2 }}>{career.salary}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Jobs */}
+                        {career.jobs && career.jobs !== "nan" && (
+                          <div style={{ marginTop: 6, background: "#fafbff", borderRadius: 8, padding: "6px 8px", border: "1px solid #f0f0f8" }}>
+                            <p style={{ fontSize: 9, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Roles</p>
+                            <p style={{ fontSize: 11, fontWeight: 600, color: "#374151", marginTop: 2 }}>{career.jobs}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Search another */}
+                  <button onClick={resetChat}
+                    style={{ width: "100%", marginTop: 12, padding: "11px 0", borderRadius: 12, background: "#eef2ff", border: "1.5px solid #c7d2fe", color: "#4338ca", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+                    🔄 Explore Another Stream
+                  </button>
+
+                  <div ref={bottomRef} />
+                </div>
+              )}
+
+              {/* No results */}
+              {step === "results" && !loading && !error && filtered.length === 0 && search && (
+                <div style={{ padding: 20, textAlign: "center" }}>
+                  <p style={{ fontSize: 28, marginBottom: 8 }}>🔍</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>No results for "{search}"</p>
+                  <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4 }}>Try a different keyword</p>
+                </div>
+              )}
             </div>
 
-            <div style={{ textAlign:"center", padding:"6px", background:"#fff", borderTop:"1px solid #f9fafb" }}>
-              <p style={{ fontSize:10, color:"#d1d5db", fontWeight:500 }}>Powered by Knowletive AI · Press Enter to send</p>
+            {/* Footer */}
+            <div style={{ textAlign: "center", padding: "8px", background: "#fff", borderTop: "1px solid #f9fafb", flexShrink: 0 }}>
+              <p style={{ fontSize: 10, color: "#d1d5db", fontWeight: 500 }}>Powered by Knowletive · Data from our career database</p>
             </div>
           </div>
         )}
@@ -294,6 +407,39 @@ Always give specific, practical advice. Mention real college names, real salary 
     </>
   );
 }
+
+/*
+──────────────────────────────────────────────────────────────
+HOW TO INTEGRATE:
+
+1. Open your page.tsx
+
+2. Find the entire old ChatBot function:
+   function ChatBot({ student }: { student: any }) {
+   ...all the code...
+   }
+   (it ends just before the PDF Generator comment)
+
+3. Replace the ENTIRE old ChatBot function with this new one
+
+4. You DON'T need to add FIELDS or STATES arrays
+   This uses your existing STREAMS and /roadmap API
+
+5. Push to GitHub:
+   git add .
+   git commit -m "new career explorer chatbot - no external API"
+   git push
+
+FEATURES:
+✅ No Claude API needed
+✅ Uses your own /roadmap backend
+✅ Shows 15 careers per stream
+✅ Search/filter within results
+✅ Shows course, exam, fee, salary, jobs
+✅ Fixed floating button click issue
+✅ Clean card UI
+──────────────────────────────────────────────────────────────
+*/
 
 /* ── PDF Generator ── */
 async function generatePDF(student: any, stream: string, drafted: any[], user: any) {
